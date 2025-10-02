@@ -40,58 +40,58 @@ En comparant ces vecteurs avec la **similarité cosinus** :
 - Score proche de **0** → critiques différentes.  
 
 ```
-CSV Input
-    │
-    ▼
+Entrée CSV
+│
+▼
 ┌─────────────────────────────────────────┐
-│  1. Load & Combine                       │
-│     titre + contenu                      │
+│ 1. Chargement & combinaison │
+│ titre + contenu │
 └─────────────────────────────────────────┘
-    │
-    ▼
+│
+▼
 ┌─────────────────────────────────────────┐
-│  2. Clean Text                           │
-│     • Remove HTML tags                   │
-│     • Remove URLs                        │
-│     • Normalize unicode (accents)        │
-│     • Remove punctuation & numbers       │
-│     • Lowercase & trim                   │
+│ 2. Nettoyage du texte │
+│ • Suppression balises HTML │
+│ • Suppression URLs │
+│ • Normalisation unicode (accents) │
+│ • Suppression ponctuation & chiffres │
+│ • Passage en minuscules │
 └─────────────────────────────────────────┘
-    │
-    ▼
+│
+▼
 ┌─────────────────────────────────────────┐
-│  3. Inject Ratings                       │
-│     text + "note_X note_X ..." (5x)      │
+│ 3. Injection de la note │
+│ texte + "note_X note_X ..." (5x) │
 └─────────────────────────────────────────┘
-    │
-    ▼
+│
+▼
 ┌─────────────────────────────────────────┐
-│  4. Filter Short Reviews                 │
-│     Keep only len(text) >= 50            │
+│ 4. Filtrage des critiques courtes │
+│ Conserver uniquement len(text) ≥ 50 │
 └─────────────────────────────────────────┘
-    │
-    ▼
+│
+▼
 ┌─────────────────────────────────────────┐
-│  5. TF-IDF Vectorization                 │
-│     • n-grams: 1-2                       │
-│     • max_features: 50,000               │
-│     • min_df: 2                          │
+│ 5. Vectorisation TF-IDF │
+│ • n-grams : 1-2 │
+│ • max_features : 50 000 │
+│ • min_df : 2 │
 └─────────────────────────────────────────┘
-    │
-    ▼
+│
+▼
 ┌─────────────────────────────────────────┐
-│  6. Cosine Similarity                    │
-│     Compare input review vs all          │
+│ 6. Similarité cosinus │
+│ Comparaison critique vs toutes │
 └─────────────────────────────────────────┘
-    │
-    ▼
+│
+▼
 ┌─────────────────────────────────────────┐
-│  7. Extract Top-K                        │
-│     numpy.argpartition (O(n))            │
+│ 7. Extraction du Top-K │
+│ numpy.argpartition (O(n)) │
 └─────────────────────────────────────────┘
-    │
-    ▼
-Results (titre, extrait, note, auteur) + score de similarité cosinus compris entre 0 et 1
+│
+▼
+Résultats : (titre, extrait, note, auteur) + score de similarité cosinus (0 à 1)
 ```
 
 ## Installation
