@@ -1,4 +1,4 @@
-# movie-review-recommender
+# Review Recommender
 
 ## Objectif
 
