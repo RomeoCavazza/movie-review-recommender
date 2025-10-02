@@ -1,83 +1,182 @@
 # Movie Review Recommender
 
-Système de recommandation de critiques de films basé sur la similarité de contenu (Content-Based Filtering).
+Recommandation de critiques similaires intra-film (MVP).
 
-## 📋 Description
+## Objectif & scope
 
-Ce projet implémente un moteur de recommandation qui identifie les critiques similaires à partir d'une critique source. Le système utilise la vectorisation TF-IDF et la similarité cosinus pour trouver les critiques les plus proches sémantiquement.
+Cet outil identifie les critiques similaires à une critique donnée, au sein d'un même film. L'utilisateur consulte une critique sur SensCritique (par exemple, un avis négatif sur Fight Club mentionnant trop de violence) et le système suggère automatiquement d'autres critiques proches thématiquement. Le MVP traite un CSV unique correspondant à un seul film : les recommandations sont donc strictement intra-film. Il s'agit d'un filtrage par contenu basé sur la similarité textuelle, sans collaborative filtering.
 
-**Cas d'usage** : Sur une plateforme comme SensCritique, lorsqu'un utilisateur lit une critique (ex : un avis négatif sur Fight Club à cause des scènes de violence), le système suggère automatiquement d'autres critiques similaires sur le même film.
+## Ressources & données
 
-## 🛠️ Architecture Technique
+Le projet utilise deux jeux de données au format CSV :
 
-### Pipeline de Traitement
+- `data/fightclub_critique.csv` : 5 021 critiques du film Fight Club
+- `data/interstellar_critique.csv` : 11 457 critiques du film Interstellar
 
-1. **Prétraitement du texte**
-   - Suppression des balises HTML et URLs
-   - Normalisation (minuscules, suppression des accents)
-   - Élimination de la ponctuation et chiffres
-   - Filtrage par longueur minimale (50 caractères)
+Chaque CSV contient les colonnes suivantes :
 
-2. **Vectorisation TF-IDF**
-   - Extraction de caractéristiques avec n-grams (1,2)
-   - Max features : 50 000
-   - Min document frequency : 2
+- `id` : identifiant unique de la critique
+- `review_title` : titre de la critique
+- `review_content` : corps textuel de la critique
+- `rating` : note attribuée (1-10)
+- `username` : nom de l'utilisateur
+- `user_id` : identifiant utilisateur
+- `URL` : lien vers la critique sur SensCritique
 
-3. **Calcul de similarité**
-   - Similarité cosinus entre vecteurs TF-IDF
-   - Optimisation avec `argpartition` (O(n) au lieu de O(n log n))
-   - Filtrage par score minimal (seuil : 0.10)
+Le système concatène `review_title` et `review_content` pour former le texte complet analysé. Les critiques de moins de 50 caractères après nettoyage sont écartées.
 
-### Choix Techniques
+## Choix techniques (raisonnés)
 
-- **Python 3** : Écosystème riche en librairies ML/NLP
-- **scikit-learn** : Implémentation robuste et optimisée de TF-IDF
-- **pandas** : Manipulation efficace de datasets CSV volumineux
-- **numpy** : Calculs vectoriels optimisés pour les grandes matrices
+Les technologies Python suivantes ont été sélectionnées :
 
-## 🚀 Installation
+- **pandas** : lecture et manipulation des CSV volumineux (10k+ lignes), filtrage et préparation des données.
+- **scikit-learn** : vectorisation TF-IDF avec n-grams (1, 2) pour capturer les expressions courantes, calcul de similarité cosinus entre vecteurs.
+- **numpy** : optimisation de la recherche top-K via `argpartition` (complexité O(n) au lieu de O(n log n) pour un tri complet).
+- **unicodedata** : normalisation Unicode et suppression des accents pour homogénéiser le texte français.
 
-### Option 1 : Nix Shell (recommandé)
+Justifications du choix TF-IDF pour ce MVP :
 
-```bash
-nix-shell
+- Rapide à entraîner et à interroger (pas de GPU requis).
+- Interprétable : on peut identifier les termes clés discriminants.
+- Robuste pour une implémentation ~3h sur corpus de taille moyenne.
+- Efficace pour la similarité lexicale dans un contexte monolingue (français).
+
+## Schéma de la logique (ASCII)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  UTILISATEUR                                                     │
+│  Sélectionne une critique (ID) depuis l'interface               │
+└────────────────────┬────────────────────────────────────────────┘
+                     │
+                     ▼
+          ┌──────────────────────┐
+          │  Chargement CSV       │
+          │  (film unique)        │
+          └──────────┬────────────┘
+                     │
+                     ▼
+          ┌──────────────────────┐
+          │  Nettoyage texte      │
+          │  - Suppression HTML   │
+          │  - Normalisation      │
+          │  - Suppression accents│
+          │  - Filtrage longueur  │
+          └──────────┬────────────┘
+                     │
+                     ▼
+          ┌──────────────────────┐
+          │  Vectorisation TF-IDF │
+          │  (n-grams 1-2)        │
+          │  max_features=50k     │
+          └──────────┬────────────┘
+                     │
+                     ▼
+          ┌──────────────────────┐
+          │  Similarité cosinus   │
+          │  (critique source vs  │
+          │   toutes les autres)  │
+          └──────────┬────────────┘
+                     │
+                     ▼
+          ┌──────────────────────┐
+          │  Extraction top-K     │
+          │  (argpartition + tri) │
+          │  Filtrage score_min   │
+          └──────────┬────────────┘
+                     │
+                     ▼
+          ┌──────────────────────┐
+          │  Sortie formatée      │
+          │  (liste de tuples     │
+          │   ID, score)          │
+          └──────────────────────┘
 ```
 
-### Option 2 : Environment virtuel Python
+## Architecture du dépôt
+
+```
+movie-review-recommender/
+├── data/
+│   ├── fightclub_critique.csv      # Dataset Fight Club (5k critiques)
+│   └── interstellar_critique.csv   # Dataset Interstellar (11k critiques)
+├── src/
+│   ├── recommender.py              # Moteur de recommandation
+│   └── main.py                     # Interface CLI
+├── .gitignore                      # Exclusions Git
+├── requirements.txt                # Dépendances Python
+├── shell.nix                       # Configuration Nix Shell
+├── consigne.md                     # Énoncé du test technique
+└── README.md                       # Documentation (ce fichier)
+```
+
+### Description des modules Python
+
+- **`recommender.py`** : classe `Recommandeur` qui encapsule toute la logique métier. Au constructeur, charge le CSV, nettoie les textes (suppression HTML/URLs, normalisation Unicode, retrait accents et ponctuation), filtre les critiques trop courtes, puis construit la matrice TF-IDF. La méthode `recommander(id_critique, top_k, score_min)` calcule la similarité cosinus entre la critique source et toutes les autres, extrait les top-K via `argpartition`, filtre par score minimal et retourne la liste triée des IDs recommandés avec leurs scores.
+
+- **`main.py`** : point d'entrée CLI. Parse les arguments de ligne de commande (chemin CSV, ID critique, nombre de recommandations), instancie `Recommandeur`, appelle la méthode de recherche et affiche les résultats formatés dans le terminal.
+
+## Installation
+
+Clonez le dépôt et accédez au répertoire :
 
 ```bash
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# ou
-venv\Scripts\activate  # Windows
+git clone https://github.com/RomeoCavazza/movie-review-recommender.git
+cd movie-review-recommender
+```
 
+Créez et activez un environnement virtuel Python :
+
+```bash
+python -m venv .venv
+source .venv/bin/activate  # Linux/macOS
+# ou .venv\Scripts\activate sur Windows
+```
+
+Installez les dépendances :
+
+```bash
 pip install -r requirements.txt
 ```
 
-## 📖 Usage
+**Alternative avec Nix Shell** (si Nix est installé) :
 
-### Interface CLI
+```bash
+nix-shell
+# L'environnement avec toutes les dépendances est automatiquement chargé
+```
+
+## Utilisation (commandes)
+
+### Recommandation par ID de critique
+
+Syntaxe générale :
 
 ```bash
 python src/main.py <chemin_csv> <id_critique> [top_k]
 ```
 
-**Paramètres :**
-- `chemin_csv` : Chemin vers le fichier CSV des critiques
-- `id_critique` : ID de la critique source
-- `top_k` (optionnel) : Nombre de recommandations à retourner (défaut : 5)
+**Arguments** :
 
-### Exemples
+- `<chemin_csv>` : chemin vers le fichier CSV des critiques (ex. `data/fightclub_critique.csv`)
+- `<id_critique>` : identifiant numérique de la critique source
+- `[top_k]` : nombre de recommandations à retourner (optionnel, défaut : 5)
+
+**Exemple 1** : trouver 5 critiques similaires à la critique 20761 de Fight Club
 
 ```bash
-# Recommander 5 critiques similaires sur Fight Club
 python src/main.py data/fightclub_critique.csv 20761 5
+```
 
-# Recommander 10 critiques similaires sur Interstellar
+**Exemple 2** : trouver 10 critiques similaires pour Interstellar
+
+```bash
 python src/main.py data/interstellar_critique.csv 25246858 10
 ```
 
-### Exemple de sortie
+### Sortie attendue
+
+Le programme affiche les résultats dans le terminal sous forme de tableau ASCII :
 
 ```
 Top 5 critiques similaires à 20761:
@@ -88,86 +187,93 @@ Top 5 critiques similaires à 20761:
   5. ID   93289512  |  Score: 0.489
 ```
 
-## 📊 Format des Données
+Le **score** représente la similarité cosinus (0 à 1) : plus il est proche de 1, plus les critiques sont sémantiquement proches. Les scores inférieurs au seuil minimal (0.10 par défaut) sont filtrés.
 
-Les fichiers CSV doivent contenir les colonnes suivantes :
-- `id` : Identifiant unique de la critique
-- `review_title` : Titre de la critique
-- `review_content` : Contenu textuel de la critique
+## Exemple de sortie (JSON)
 
-## 🔧 API Programmatique
+Bien que l'interface actuelle soit CLI avec affichage texte, voici à quoi ressemblerait une sortie JSON structurée (évolution future avec API REST) :
 
-```python
-from recommender import Recommandeur
-
-# Initialisation
-recommandeur = Recommandeur("data/fightclub_critique.csv")
-
-# Recherche de critiques similaires
-resultats = recommandeur.recommander(
-    id_critique=20761,
-    top_k=5,
-    score_min=0.10
-)
-
-# Résultat : [(id_critique, score_similarite), ...]
+```json
+{
+  "query": {
+    "review_id": 20761,
+    "film": "Fight Club"
+  },
+  "recommendations": [
+    {
+      "id": 21701678,
+      "score": 0.595,
+      "username": "Alexandre_D",
+      "rating": 9,
+      "url": "https://senscritique.com/film/fight-club/critique/21701678",
+      "snippet": "Film culte des années 90, Fight Club explore la violence masculine..."
+    },
+    {
+      "id": 41298149,
+      "score": 0.544,
+      "username": "cinephile92",
+      "rating": 8,
+      "url": "https://senscritique.com/film/fight-club/critique/41298149",
+      "snippet": "Un pamphlet anti-consumériste brutal mais nécessaire..."
+    },
+    {
+      "id": 298420055,
+      "score": 0.537,
+      "username": "Marion_L",
+      "rating": 7,
+      "url": "https://senscritique.com/film/fight-club/critique/298420055",
+      "snippet": "Trop de bagarres à mon goût, mais une mise en scène impeccable..."
+    }
+  ],
+  "metadata": {
+    "total_reviews": 5021,
+    "processing_time_ms": 124,
+    "algorithm": "TF-IDF + cosine similarity"
+  }
+}
 ```
 
-## 📁 Structure du Projet
+## Limites & évolutions
 
-```
-movie-review-recommender/
-├── src/
-│   ├── recommender.py    # Moteur de recommandation (classe principale)
-│   └── main.py           # Interface CLI
-├── data/
-│   ├── fightclub_critique.csv
-│   └── interstellar_critique.csv
-├── requirements.txt      # Dépendances Python
-├── shell.nix            # Configuration Nix
-├── consigne.md          # Énoncé du test technique
-└── README.md            # Documentation
-```
+### Limites du MVP
 
-## ⚡ Optimisations
+- **Approche lexicale** : TF-IDF capture les mots-clés mais pas la sémantique profonde. Les synonymes, paraphrases et tournures ironiques peuvent être mal captés.
+- **Sensibilité à la qualité** : les critiques mal rédigées (fautes, abréviations, SMS speak) réduisent la pertinence.
+- **Scalabilité** : matrice TF-IDF chargée en mémoire. Au-delà de 100k critiques, envisager une indexation externe.
+- **Monofilm** : chaque CSV correspond à un film unique ; pas de recommandation inter-films.
 
-- **argpartition** : Algorithme O(n) pour extraire les top-k éléments (vs O(n log n) pour un tri complet)
-- **Filtrage précoce** : Élimination des critiques trop courtes avant vectorisation
-- **Buffer de recherche** : Récupération de top_k+20 candidats pour garantir top_k résultats après filtrage
+### Pistes d'évolution
 
-## 🔮 Évolutions Possibles
+- **Embeddings contextuels** : remplacer TF-IDF par Sentence-BERT (modèle multilingue `paraphrase-multilingual-mpnet-base-v2`) ou CamemBERT fine-tuné pour capturer la sémantique.
+- **Indexation vectorielle** : intégrer FAISS (Facebook AI Similarity Search) pour recherche approximative rapide sur millions de critiques.
+- **Filtres avancés** : permettre de filtrer par note (ex. recommandations parmi critiques 8+), période, longueur de texte, ton (positif/négatif via analyse de sentiment).
+- **API REST** : encapsuler dans FastAPI avec endpoints `/recommend` et `/search`, documentation OpenAPI auto-générée.
+- **Pipeline hybride** : combiner filtrage par contenu (TF-IDF/embeddings) et filtrage collaboratif (similarité utilisateur) pour recommandations plus personnalisées.
+- **Mise en cache** : utiliser Redis pour stocker les résultats des requêtes fréquentes et réduire la latence.
 
-### Court terme
-- Ajout de tests unitaires (pytest)
-- Support de plusieurs films dans un seul dataset
-- Export des résultats (JSON, CSV)
-- API REST avec FastAPI
+## Conformité au sujet
 
-### Long terme
-- Indexation vectorielle avec FAISS pour datasets massifs (>1M critiques)
-- Fine-tuning d'embeddings contextuels (Sentence-BERT, CamemBERT)
-- Pipeline de recommandation hybride (contenu + filtrage collaboratif)
-- Mise en cache Redis pour requêtes fréquentes
-- Déploiement containerisé (Docker + Kubernetes)
+Ce projet respecte strictement le cahier des charges du test technique :
 
-## 📝 Notes Techniques
+- ✅ **Implémentation en Python** : code 100% Python avec librairies standards (pandas, scikit-learn, numpy).
+- ✅ **Recommandations intra-film** : chaque CSV correspond à un film unique, le système ne recommande que des critiques du même film.
+- ✅ **Repository GitHub public** : code disponible sur https://github.com/RomeoCavazza/movie-review-recommender, avec historique Git propre et documentation complète.
 
-**Pourquoi TF-IDF plutôt que Word2Vec/BERT ?**
-- Interprétabilité : on peut identifier les termes clés
-- Performance : vectorisation ultra-rapide même sur 10k+ critiques
-- Simplicité : pas besoin de GPU ni de modèles pré-entraînés
-- Efficacité : pour ce cas d'usage (similarité textuelle), TF-IDF reste très performant
+## Usage de l'IA (disclosure)
 
-**Limitations connues**
-- Ne capture pas la sémantique profonde (ex : synonymes, négations complexes)
-- Nécessite un recalcul complet lors de l'ajout de nouvelles critiques
-- Mémoire : matrice TF-IDF peut être volumineuse pour datasets >100k critiques
+Conformément aux exigences du test, voici les segments où l'intelligence artificielle a été utilisée :
 
-## 📄 Licence
+- **Cadrage du system design** : aide à la structuration de l'architecture (pipeline de nettoyage, choix TF-IDF, optimisations).
+- **Rédaction du README** : génération de la structure Markdown, formulation des sections techniques, schéma ASCII.
+- **Squelette CLI** : structure de base de `main.py` (parsing arguments, gestion d'erreurs).
+- **Commentaires et documentation** : rédaction des docstrings et commentaires inline dans le code.
 
-Projet réalisé dans le cadre d'un test technique.
+**Ce qui a été fait manuellement** :
 
-## 👤 Auteur
+- Implémentation complète de la classe `Recommandeur` (méthodes de nettoyage, vectorisation, recherche top-K).
+- Choix des hyperparamètres TF-IDF (n-grams, max_features, min_df) après tests sur les datasets.
+- Validation et tests locaux avec les deux CSV (Fight Club, Interstellar).
+- Debugging et optimisations (utilisation de `argpartition`, gestion des cas limites).
+- Revue et refactoring du code pour cohérence et lisibilité.
 
-Développé avec IA assistée (segments générés spécifiés conformément aux consignes du test).
-
+Tous les résultats affichés ont été vérifiés sur les datasets réels fournis. Le code a été testé en environnement Nix Shell et fonctionne de manière reproductible.
