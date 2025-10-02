@@ -1,9 +1,3 @@
-### IMPORTS ###
-# sklearn     : Vectorisation TF-IDF + similarité cosinus
-# pandas      : Chargement CSV et manipulation de dataframes
-# numpy       : Optimisation argpartition (O(n) au lieu de O(n log n))
-# re/unicodedata : Nettoyage et normalisation de texte
-
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import pandas as pd
@@ -12,117 +6,94 @@ import re
 import unicodedata
 
 
-### NORMALISATION UNICODE ###
-# Décompose les caractères accentués en caractères de base plus modificateurs,
-# puis encode en ASCII en supprimant les modificateurs.
-
-def supprimer_accents(texte: str) -> str:
-    normalise = unicodedata.normalize("NFKD", texte)
-    ascii_seulement = normalise.encode("ascii", "ignore").decode("ascii")
-    return ascii_seulement
+def remove_accents(text):
+    normalized = unicodedata.normalize("NFKD", text)
+    return normalized.encode("ascii", "ignore").decode("ascii")
 
 
-### PIPELINE DE NETTOYAGE ###
-# Applique une série de transformations pour normaliser le texte brut :
-# supprime les balises HTML et URLs, convertit en minuscules, retire les accents,
-# élimine la ponctuation et les chiffres, normalise les espaces multiples.
+def clean_text(text):
+    text = re.sub(r"<[^>]+>", " ", str(text))
+    text = re.sub(r"https?://\S+|@\S+", " ", text)
+    text = text.lower()
+    text = remove_accents(text)
+    text = re.sub(r"[^\w\s]|\d+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
 
-def nettoyer_texte(texte):
-    if not isinstance(texte, str):
-        return ""
+
+def load_data(csv_path):
+    df = pd.read_csv(csv_path, encoding="utf-8")
     
-    texte = re.sub(r"<[^>]+>", " ", texte)
-    texte = re.sub(r"https?://\S+|@\S+", " ", texte)
-    texte = texte.lower()
-    texte = supprimer_accents(texte)
-    texte = re.sub(r"[^\w\s]|\d+", " ", texte)
-    texte = re.sub(r"\s+", " ", texte).strip()
+    title = df.get("review_title", "").fillna("")
+    content = df.get("review_content", "").fillna("")
+    df["text"] = (title + " " + content).apply(clean_text)
     
-    return texte
+    # On injecte la note dans le texte pour influencer la similarité
+    # Une critique notée 10/10 aura "note_10" répété 5 fois dans son vecteur
+    rating = df.get("rating")
+    df["text_rating"] = df.apply(
+        lambda row: row["text"] + (f" note_{int(row['rating'])}" * 5 if pd.notna(row.get("rating")) else ""),
+        axis=1
+    )
+    
+    df = df[df["text"].str.len() >= 50].reset_index(drop=True)
+    df["id_str"] = df["id"].astype(str)
+    
+    reviews = df[["id", "id_str", "text_rating"]]
+    
+    # TF-IDF : on transforme le texte en vecteurs numériques
+    # n-grams 1-2 = mots seuls + paires de mots (ex: "très bon")
+    # max 50k features pour pas exploser la mémoire
+    vectors = TfidfVectorizer(max_features=50000, ngram_range=(1, 2), min_df=2).fit_transform(reviews["text_rating"])
+    
+    lookup = {row["id_str"]: i for i, row in reviews.iterrows()}
+    
+    return df, reviews, vectors, lookup
 
 
-### RECOMMANDEUR - Filtrage par Contenu ###
-# Charge les critiques depuis un CSV, les prétraite, construit une matrice TF-IDF
-# et permet de rechercher les critiques similaires par similarité cosinus.
-
-class Recommandeur:
-
-    def __init__(self, chemin_csv: str):
-        # Chargement du CSV
-        dataframe = pd.read_csv(chemin_csv, encoding="utf-8")
-
-        # Préparation du texte
-        colonne_titre = dataframe.get("review_title", pd.Series([""] * len(dataframe)))
-        colonne_contenu = dataframe.get("review_content", pd.Series([""] * len(dataframe)))
-        texte_combine = (colonne_titre.fillna("") + " " + colonne_contenu.fillna("")).str.strip()
-
-        dataframe["texte_brut"] = texte_combine
-        dataframe["texte_propre"] = dataframe["texte_brut"].apply(nettoyer_texte)
-
-        # Filtrage des critiques
-        LONGUEUR_MIN = 50
-        dataframe = dataframe[dataframe["texte_propre"].str.len() >= LONGUEUR_MIN].copy()
-
-        dataframe["id_str"] = dataframe["id"].astype(str)
-        self.df_critiques = dataframe[["id", "id_str", "texte_propre"]].reset_index(drop=True)
-
-        # Vectorisation TF-IDF
-        self.vectoriseur = TfidfVectorizer(
-            max_features=50000,
-            ngram_range=(1, 2),
-            min_df=2
-        )
-        self.matrice_tfidf = self.vectoriseur.fit_transform(self.df_critiques["texte_propre"])
-
-        # Index de recherche
-        self.id_vers_index = {
-            id_critique: index
-            for index, id_critique in enumerate(self.df_critiques["id_str"])
-        }
-
-    ### RECHERCHE K-PLUS PROCHES VOISINS ###
-    # Calcule les scores de similarité cosinus entre une critique source et toutes
-    # les autres, utilise argpartition pour extraire les k meilleures en O(n),
-    # filtre par score minimal et retourne la liste triée.
-
-    def recommander(self, id_critique, top_k=5, score_min=0.10):
-        # Validation de l'ID
-        id_critique_str = str(id_critique)
-
-        if id_critique_str not in self.id_vers_index:
-            return []
-
-        index_source = self.id_vers_index[id_critique_str]
-
-        # Calcul de similarité
-        scores_similarite = cosine_similarity(
-            self.matrice_tfidf[index_source],
-            self.matrice_tfidf
-        ).flatten()
-
-        scores_similarite[index_source] = -1.0
-
-        # Optimisation argpartition
-        nombre_critiques = len(scores_similarite)
-        taille_buffer = top_k + 20
-        k_partition = min(taille_buffer, nombre_critiques)
-
-        indices_non_tries = np.argpartition(scores_similarite, -k_partition)[-k_partition:]
-        indices_tries = indices_non_tries[np.argsort(scores_similarite[indices_non_tries])[::-1]]
-
-        # Construction des résultats
-        resultats = []
-        for index in indices_tries:
-            if len(resultats) >= top_k:
-                break
-
-            score = scores_similarite[index]
-            if score < score_min:
-                continue
-
-            ligne_critique = self.df_critiques.loc[index]
-            id_critique_int = int(ligne_critique["id"]) if pd.notna(ligne_critique["id"]) else None
-
-            resultats.append((id_critique_int, round(float(score), 3)))
-
-        return resultats
+def find_similar(review_id, data, reviews, vectors, lookup, top_k=5, min_score=0.10):
+    idx = lookup.get(str(review_id))
+    if idx is None:
+        return []
+    
+    # Calcule la similarité entre la critique demandée et toutes les autres
+    scores = cosine_similarity(vectors[idx], vectors).flatten()
+    scores[idx] = -1.0
+    
+    # On prend un buffer plus grand que top_k au cas où certaines critiques
+    # seraient filtrées par le min_score
+    buffer_size = min(top_k + 20, len(scores))
+    
+    # argpartition = optimisation numpy pour extraire les top-K sans tout trier
+    # O(n) au lieu de O(n log n)
+    top_indices = np.argpartition(scores, -buffer_size)[-buffer_size:]
+    sorted_indices = top_indices[np.argsort(scores[top_indices])[::-1]]
+    
+    results = []
+    for i in sorted_indices:
+        if len(results) >= top_k:
+            break
+        if scores[i] < min_score:
+            continue
+        
+        review_id = int(reviews.loc[i, "id"])
+        review = data[data["id"] == review_id].iloc[0]
+        
+        title = str(review.get("review_title", "")).strip()
+        content = str(review.get("review_content", "")).strip()
+        excerpt = content[:150] + "..." if len(content) > 150 else content
+        
+        rating = review.get("rating")
+        rating_value = int(rating) if pd.notna(rating) else None
+        
+        author = str(review.get("username", "Anonyme")).strip()
+        
+        results.append({
+            "id": review_id,
+            "score": round(float(scores[i]), 3),
+            "titre": title,
+            "extrait": excerpt,
+            "note": rating_value,
+            "auteur": author
+        })
+    
+    return results

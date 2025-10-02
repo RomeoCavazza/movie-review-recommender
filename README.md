@@ -1,247 +1,118 @@
-# Movie Review Recommender
+# movie-review-recommender
 
-Recommandation de critiques similaires intra-film (MVP).
+Recommandation de critiques similaires par TF-IDF et similarité cosinus.
 
-## Objectif & scope
+## Objectif
 
-Cet outil identifie les critiques similaires à une critique donnée, au sein d'un même film. L'utilisateur consulte une critique sur SensCritique (par exemple, un avis négatif sur Fight Club mentionnant trop de violence) et le système suggère automatiquement d'autres critiques proches thématiquement. Le MVP traite un CSV unique correspondant à un seul film : les recommandations sont donc strictement intra-film. Il s'agit d'un filtrage par contenu basé sur la similarité textuelle, sans collaborative filtering.
+Trouve des critiques de films similaires à une critique donnée (même film). Conçu pour suggérer d'autres avis proches sur une page de lecture de critique.
 
-## Ressources & données
+**Exemple** : Un utilisateur lit une critique négative de Fight Club → le système suggère d'autres critiques similaires.
 
-Le projet utilise deux jeux de données au format CSV :
+## Données
 
-- `data/fightclub_critique.csv` : 5 021 critiques du film Fight Club
-- `data/interstellar_critique.csv` : 11 457 critiques du film Interstellar
+Deux fichiers CSV fournis :
+- `data/fightclub_critique.csv` (~ 5 000 critiques)
+- `data/interstellar_critique.csv` (~ 11 000 critiques)
 
-Chaque CSV contient les colonnes suivantes :
+**Colonnes** : `id`, `review_title`, `review_content`, `rating`, `username`
 
-- `id` : identifiant unique de la critique
-- `review_title` : titre de la critique
-- `review_content` : corps textuel de la critique
-- `rating` : note attribuée (1-10)
-- `username` : nom de l'utilisateur
-- `user_id` : identifiant utilisateur
-- `URL` : lien vers la critique sur SensCritique
-
-Le système concatène `review_title` et `review_content` pour former le texte complet analysé. Les critiques de moins de 50 caractères après nettoyage sont écartées.
-
-## Choix techniques (raisonnés)
-
-Les technologies Python suivantes ont été sélectionnées :
-
-- **pandas** : lecture et manipulation des CSV volumineux (10k+ lignes), filtrage et préparation des données.
-- **scikit-learn** : vectorisation TF-IDF avec n-grams (1, 2) pour capturer les expressions courantes, calcul de similarité cosinus entre vecteurs.
-- **numpy** : optimisation de la recherche top-K via `argpartition` (complexité O(n) au lieu de O(n log n) pour un tri complet).
-- **unicodedata** : normalisation Unicode et suppression des accents pour homogénéiser le texte français.
-
-Justifications du choix TF-IDF pour ce MVP :
-
-- Rapide à entraîner et à interroger (pas de GPU requis).
-- Interprétable : on peut identifier les termes clés discriminants.
-- Robuste pour une implémentation ~3h sur corpus de taille moyenne.
-- Efficace pour la similarité lexicale dans un contexte monolingue (français).
-
-## Schéma de la logique (ASCII)
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  UTILISATEUR                                                     │
-│  Sélectionne une critique (ID) depuis l'interface               │
-└────────────────────┬────────────────────────────────────────────┘
-                     │
-                     ▼
-          ┌──────────────────────┐
-          │  Chargement CSV       │
-          │  (film unique)        │
-          └──────────┬────────────┘
-                     │
-                     ▼
-          ┌──────────────────────┐
-          │  Nettoyage texte      │
-          │  - Suppression HTML   │
-          │  - Normalisation      │
-          │  - Suppression accents│
-          │  - Filtrage longueur  │
-          └──────────┬────────────┘
-                     │
-                     ▼
-          ┌──────────────────────┐
-          │  Vectorisation TF-IDF │
-          │  (n-grams 1-2)        │
-          │  max_features=50k     │
-          └──────────┬────────────┘
-                     │
-                     ▼
-          ┌──────────────────────┐
-          │  Similarité cosinus   │
-          │  (critique source vs  │
-          │   toutes les autres)  │
-          └──────────┬────────────┘
-                     │
-                     ▼
-          ┌──────────────────────┐
-          │  Extraction top-K     │
-          │  (argpartition + tri) │
-          │  Filtrage score_min   │
-          └──────────┬────────────┘
-                     │
-                     ▼
-          ┌──────────────────────┐
-          │  Sortie formatée      │
-          │  (liste de tuples     │
-          │   ID, score)          │
-          └──────────────────────┘
-```
-
-## Architecture du dépôt
+## Structure
 
 ```
 movie-review-recommender/
 ├── data/
-│   ├── fightclub_critique.csv      # Dataset Fight Club (5k critiques)
-│   └── interstellar_critique.csv   # Dataset Interstellar (11k critiques)
+│   ├── fightclub_critique.csv
+│   └── interstellar_critique.csv
 ├── src/
-│   ├── recommender.py              # Moteur de recommandation
-│   └── main.py                     # Interface CLI
-├── .gitignore                      # Exclusions Git
-├── requirements.txt                # Dépendances Python
-├── shell.nix                       # Configuration Nix Shell
-├── consigne.md                     # Énoncé du test technique
-└── README.md                       # Documentation (ce fichier)
+│   ├── recommender.py    (86 lignes)
+│   └── main.py           (17 lignes)
+├── requirements.txt
+└── README.md
 ```
 
-### Description des modules Python
+**Pipeline** :
 
-- **`recommender.py`** : classe `Recommandeur` qui encapsule toute la logique métier. Au constructeur, charge le CSV, nettoie les textes (suppression HTML/URLs, normalisation Unicode, retrait accents et ponctuation), filtre les critiques trop courtes, puis construit la matrice TF-IDF. La méthode `recommander(id_critique, top_k, score_min)` calcule la similarité cosinus entre la critique source et toutes les autres, extrait les top-K via `argpartition`, filtre par score minimal et retourne la liste triée des IDs recommandés avec leurs scores.
+**Stack** : Python, pandas, scikit-learn, numpy
 
-- **`main.py`** : point d'entrée CLI. Parse les arguments de ligne de commande (chemin CSV, ID critique, nombre de recommandations), instancie `Recommandeur`, appelle la méthode de recherche et affiche les résultats formatés dans le terminal.
+```
+CSV Input
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│  1. Load & Combine                       │
+│     titre + contenu                      │
+└─────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│  2. Clean Text                           │
+│     • Remove HTML tags                   │
+│     • Remove URLs                        │
+│     • Normalize unicode (accents)        │
+│     • Remove punctuation & numbers       │
+│     • Lowercase & trim                   │
+└─────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│  3. Inject Ratings                       │
+│     text + "note_X note_X ..." (5x)      │
+└─────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│  4. Filter Short Reviews                 │
+│     Keep only len(text) >= 50            │
+└─────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│  5. TF-IDF Vectorization                 │
+│     • n-grams: 1-2                       │
+│     • max_features: 50,000               │
+│     • min_df: 2                          │
+└─────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│  6. Cosine Similarity                    │
+│     Compare input review vs all          │
+└─────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│  7. Extract Top-K                        │
+│     numpy.argpartition (O(n))            │
+└─────────────────────────────────────────┘
+    │
+    ▼
+Results (titre, extrait, note, auteur) + score (0-1) (plus proche de 1 = plus similaire)
+
+```
+
+**Pourquoi TF-IDF ?**
+- Rapide (pas de GPU requis)
+- Interprétable (vocabulaire visible)
+- Efficace pour similarité lexicale
+- Flexible (intégration des notes)
 
 ## Installation
-
-Clonez le dépôt et accédez au répertoire :
 
 ```bash
 git clone https://github.com/RomeoCavazza/movie-review-recommender.git
 cd movie-review-recommender
-```
-
-Créez et activez un environnement virtuel Python :
-
-```bash
 python -m venv .venv
-source .venv/bin/activate  # Linux/macOS
-# ou .venv\Scripts\activate sur Windows
-```
-
-Installez les dépendances :
-
-```bash
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-
-## Utilisation (commandes)
-
-### Recommandation par ID de critique
-
-Syntaxe générale :
+## Utilisation
 
 ```bash
 python src/main.py <chemin_csv> <id_critique> [top_k]
 ```
 
-**Arguments** :
-
-- `<chemin_csv>` : chemin vers le fichier CSV des critiques (ex. `data/fightclub_critique.csv`)
-- `<id_critique>` : identifiant numérique de la critique source
-- `[top_k]` : nombre de recommandations à retourner (optionnel, défaut : 5)
-
-**Exemple 1** : trouver 5 critiques similaires à la critique 20761 de Fight Club
-
+**Exemple** :
 ```bash
-python src/main.py data/fightclub_critique.csv 20761 5
+python src/main.py data/fightclub_critique.csv 20761 3
 ```
-
-**Exemple 2** : trouver 10 critiques similaires pour Interstellar
-
-```bash
-python src/main.py data/interstellar_critique.csv 25246858 10
-```
-
-### Sortie attendue
-
-Le programme affiche les résultats dans le terminal sous forme de tableau ASCII :
-
-```
-Top 5 critiques similaires à 20761:
-  1. ID   21701678  |  Score: 0.595
-  2. ID   41298149  |  Score: 0.544
-  3. ID  298420055  |  Score: 0.537
-  4. ID   16685573  |  Score: 0.494
-  5. ID   93289512  |  Score: 0.489
-```
-
-Le **score** représente la similarité cosinus (0 à 1) : plus il est proche de 1, plus les critiques sont sémantiquement proches. Les scores inférieurs au seuil minimal (0.10 par défaut) sont filtrés.
-
-## Exemple de sortie (JSON)
-
-Bien que l'interface actuelle soit CLI avec affichage texte, voici à quoi ressemblerait une sortie JSON structurée (évolution future avec API REST) :
-
-```json
-{
-  "query": {
-    "review_id": 20761,
-    "film": "Fight Club"
-  },
-  "recommendations": [
-    {
-      "id": 21701678,
-      "score": 0.595,
-      "username": "Alexandre_D",
-      "rating": 9,
-      "url": "https://senscritique.com/film/fight-club/critique/21701678",
-      "snippet": "Film culte des années 90, Fight Club explore la violence masculine..."
-    },
-    {
-      "id": 41298149,
-      "score": 0.544,
-      "username": "cinephile92",
-      "rating": 8,
-      "url": "https://senscritique.com/film/fight-club/critique/41298149",
-      "snippet": "Un pamphlet anti-consumériste brutal mais nécessaire..."
-    },
-    {
-      "id": 298420055,
-      "score": 0.537,
-      "username": "Marion_L",
-      "rating": 7,
-      "url": "https://senscritique.com/film/fight-club/critique/298420055",
-      "snippet": "Trop de bagarres à mon goût, mais une mise en scène impeccable..."
-    }
-  ],
-  "metadata": {
-    "total_reviews": 5021,
-    "processing_time_ms": 124,
-    "algorithm": "TF-IDF + cosine similarity"
-  }
-}
-```
-
-## Évolutions possibles
-
-Pistes d'amélioration à court terme : ajout de filtres (note, période), gestion multi-films (recommandations extra-film), front page minimale pour visualisation web.
-
-## Conformité au sujet
-
-✅ Implémentation Python | ✅ Recommandations intra-film (un CSV = un film) | ✅ Repository GitHub public
-
-## Usage de l'IA (disclosure)
-
-Conformément aux exigences du test, l'intelligence artificielle (Claude/Cursor) a été utilisée pour :
-
-- **Implémentation du code** : génération de la classe `Recommandeur` et de la fonction `recommander()` avec pipeline de nettoyage, vectorisation TF-IDF et recherche top-K optimisée.
-- **Interface CLI** : création du fichier `main.py` (parsing arguments, appel de la classe, affichage formaté).
-- **Documentation complète** : rédaction intégrale du README (structure, schéma ASCII, exemples), commentaires inline dans le code Python.
-- **Configuration projet** : fichiers `.gitignore`, `requirements.txt`, structure du repository.
-
-Le code a été testé localement sur les deux datasets fournis (Fight Club, Interstellar) et fonctionne de manière reproductible en environnement Nix Shell.
