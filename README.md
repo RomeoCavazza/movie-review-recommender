@@ -139,12 +139,6 @@ Installez les dépendances :
 pip install -r requirements.txt
 ```
 
-**Alternative avec Nix Shell** (si Nix est installé) :
-
-```bash
-nix-shell
-# L'environnement avec toutes les dépendances est automatiquement chargé
-```
 
 ## Utilisation (commandes)
 
@@ -233,47 +227,21 @@ Bien que l'interface actuelle soit CLI avec affichage texte, voici à quoi resse
 }
 ```
 
-## Limites & évolutions
+## Évolutions possibles
 
-### Limites du MVP
-
-- **Approche lexicale** : TF-IDF capture les mots-clés mais pas la sémantique profonde. Les synonymes, paraphrases et tournures ironiques peuvent être mal captés.
-- **Sensibilité à la qualité** : les critiques mal rédigées (fautes, abréviations, SMS speak) réduisent la pertinence.
-- **Scalabilité** : matrice TF-IDF chargée en mémoire. Au-delà de 100k critiques, envisager une indexation externe.
-- **Monofilm** : chaque CSV correspond à un film unique ; pas de recommandation inter-films.
-
-### Pistes d'évolution
-
-- **Embeddings contextuels** : remplacer TF-IDF par Sentence-BERT (modèle multilingue `paraphrase-multilingual-mpnet-base-v2`) ou CamemBERT fine-tuné pour capturer la sémantique.
-- **Indexation vectorielle** : intégrer FAISS (Facebook AI Similarity Search) pour recherche approximative rapide sur millions de critiques.
-- **Filtres avancés** : permettre de filtrer par note (ex. recommandations parmi critiques 8+), période, longueur de texte, ton (positif/négatif via analyse de sentiment).
-- **API REST** : encapsuler dans FastAPI avec endpoints `/recommend` et `/search`, documentation OpenAPI auto-générée.
-- **Pipeline hybride** : combiner filtrage par contenu (TF-IDF/embeddings) et filtrage collaboratif (similarité utilisateur) pour recommandations plus personnalisées.
-- **Mise en cache** : utiliser Redis pour stocker les résultats des requêtes fréquentes et réduire la latence.
+Pistes d'amélioration à court terme : ajout de filtres (note, période), gestion multi-films (recommandations extra-film), front page minimale pour visualisation web.
 
 ## Conformité au sujet
 
-Ce projet respecte strictement le cahier des charges du test technique :
-
-- ✅ **Implémentation en Python** : code 100% Python avec librairies standards (pandas, scikit-learn, numpy).
-- ✅ **Recommandations intra-film** : chaque CSV correspond à un film unique, le système ne recommande que des critiques du même film.
-- ✅ **Repository GitHub public** : code disponible sur https://github.com/RomeoCavazza/movie-review-recommender, avec historique Git propre et documentation complète.
+✅ Implémentation Python | ✅ Recommandations intra-film (un CSV = un film) | ✅ Repository GitHub public
 
 ## Usage de l'IA (disclosure)
 
-Conformément aux exigences du test, voici les segments où l'intelligence artificielle a été utilisée :
+Conformément aux exigences du test, l'intelligence artificielle (Claude/Cursor) a été utilisée pour :
 
-- **Cadrage du system design** : aide à la structuration de l'architecture (pipeline de nettoyage, choix TF-IDF, optimisations).
-- **Rédaction du README** : génération de la structure Markdown, formulation des sections techniques, schéma ASCII.
-- **Squelette CLI** : structure de base de `main.py` (parsing arguments, gestion d'erreurs).
-- **Commentaires et documentation** : rédaction des docstrings et commentaires inline dans le code.
+- **Implémentation du code** : génération de la classe `Recommandeur` et de la fonction `recommander()` avec pipeline de nettoyage, vectorisation TF-IDF et recherche top-K optimisée.
+- **Interface CLI** : création du fichier `main.py` (parsing arguments, appel de la classe, affichage formaté).
+- **Documentation complète** : rédaction intégrale du README (structure, schéma ASCII, exemples), commentaires inline dans le code Python.
+- **Configuration projet** : fichiers `.gitignore`, `requirements.txt`, structure du repository.
 
-**Ce qui a été fait manuellement** :
-
-- Implémentation complète de la classe `Recommandeur` (méthodes de nettoyage, vectorisation, recherche top-K).
-- Choix des hyperparamètres TF-IDF (n-grams, max_features, min_df) après tests sur les datasets.
-- Validation et tests locaux avec les deux CSV (Fight Club, Interstellar).
-- Debugging et optimisations (utilisation de `argpartition`, gestion des cas limites).
-- Revue et refactoring du code pour cohérence et lisibilité.
-
-Tous les résultats affichés ont été vérifiés sur les datasets réels fournis. Le code a été testé en environnement Nix Shell et fonctionne de manière reproductible.
+Le code a été testé localement sur les deux datasets fournis (Fight Club, Interstellar) et fonctionne de manière reproductible en environnement Nix Shell.
