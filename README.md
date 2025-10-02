@@ -1,7 +1,5 @@
 # movie-review-recommender
 
-Recommandation de critiques similaires par TF-IDF et similarité cosinus.
-
 ## Objectif
 
 Trouve des critiques de films similaires à une critique donnée (même film). Conçu pour suggérer d'autres avis proches sur une page de lecture de critique.
