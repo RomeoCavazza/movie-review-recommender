@@ -6,14 +6,6 @@ Trouve des critiques de films similaires à une critique donnée (même film). C
 
 **Exemple** : Un utilisateur lit une critique négative de Fight Club → le système suggère d'autres critiques similaires.
 
-## Données
-
-Deux fichiers CSV fournis :
-- `data/fightclub_critique.csv` (~ 5 000 critiques)
-- `data/interstellar_critique.csv` (~ 11 000 critiques)
-
-**Colonnes** : `id`, `review_title`, `review_content`, `rating`, `username`
-
 ## Structure
 
 ```
@@ -27,10 +19,23 @@ movie-review-recommender/
 ├── requirements.txt
 └── README.md
 ```
+## Choix techniques
 
-**Pipeline** :
+Le projet est codé en **Python 3** et repose sur un petit nombre de bibliothèques standards :
 
-**Stack** : Python, pandas, scikit-learn, numpy
+- **pandas** : utilisé pour charger les fichiers CSV et manipuler les colonnes (sélection, concaténation du titre + contenu, filtrage des critiques trop courtes).  
+- **numpy** : fournit les structures numériques rapides et la fonction `argpartition` qui permet d’extraire le top-K des similarités en temps linéaire au lieu d’un tri complet (utile quand il y a des milliers de critiques).  
+- **scikit-learn** : coeur de l’algorithme avec `TfidfVectorizer` pour transformer chaque critique en vecteur pondéré par la fréquence des termes, et `cosine_similarity` pour mesurer la proximité entre critiques.  
+- **unicodedata / re (regex)** : nettoient les textes (suppression des accents, ponctuation, HTML, URLs).
+
+### Pourquoi TF-IDF + cosinus ?
+
+- **TF-IDF (Term Frequency – Inverse Document Frequency)** donne une représentation claire : chaque mot/bi-gramme a un poids qui augmente avec sa fréquence dans la critique mais diminue s’il est trop courant dans tout le corpus.  
+- Couplé avec la **similarité cosinus**, cela permet de comparer deux critiques sur leur **profil lexical** : plus elles partagent des expressions marquantes (ex. *“combats à mains nues”*, *“rythme lent”*), plus leur score est proche de 1.  
+- Contrairement à des embeddings plus lourds (BERT, Sentence-Transformers), TF-IDF a l’avantage d’être :  
+  - **rapide** à calculer (même sur 10 000 critiques),  
+  - **interprétable** (on peut voir quels mots contribuent au score),  
+  - **sans dépendances lourdes** (CPU suffisant, pas besoin de GPU). 
 
 ```
 CSV Input
@@ -87,12 +92,6 @@ CSV Input
 Results (titre, extrait, note, auteur) + score (0-1) (plus proche de 1 = plus similaire)
 
 ```
-
-**Pourquoi TF-IDF ?**
-- Rapide (pas de GPU requis)
-- Interprétable (vocabulaire visible)
-- Efficace pour similarité lexicale
-- Flexible (intégration des notes)
 
 ## Installation
 
