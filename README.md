@@ -91,8 +91,7 @@ CSV Input
 └─────────────────────────────────────────┘
     │
     ▼
-Results (titre, extrait, note, auteur) + score (0-1) (plus proche de 1 = plus similaire)
-
+Results (titre, extrait, note, auteur) + score de similarité cosinus compris entre 0 et 1
 ```
 
 ## Installation
