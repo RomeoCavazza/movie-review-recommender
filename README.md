@@ -1,4 +1,4 @@
-# Review Recommender
+# Movie review recommender
 
 ## Objectif
 
