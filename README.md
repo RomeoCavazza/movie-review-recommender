@@ -117,4 +117,4 @@ python src/main.py data/fightclub_critique.csv 20761 3
 
 ## Note
 
-Intervention de Claude Sonnet 4.5 pour l'implémentation de la vectorisation TF-ID et le calcul de similarité cosinus (+ rédaction du README.md)
+Claude Sonnet 4.5 utilisé en renfort sur la logique la vectorisation TF-ID et le calcul de similarité cosinus.
