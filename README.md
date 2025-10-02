@@ -119,4 +119,4 @@ python src/main.py data/fightclub_critique.csv 20761 3
 
 ## Note
 
-Projet développé avec assistance IA (Claude/Cursor) pour l'implémentation de la vectorisation TF-IDF, du calcul de similarité cosinus et la rédaction du README.
+Intervention de Claude Sonnet 4.5 pour l'implémentation de la vectorisation TF-ID et le calcul de similarité cosinus (+ rédaction du README.md)
