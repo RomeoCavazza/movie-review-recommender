@@ -114,7 +114,3 @@ python src/main.py <chemin_csv> <id_critique> [top_k]
 ```bash
 python src/main.py data/fightclub_critique.csv 20761 3
 ```
-
-## Note
-
-Claude Sonnet 4.5 utilisé en renfort sur la logique la vectorisation TF-ID et le calcul de similarité cosinus.
